@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <CheckBoxPreference
+       android:key="start_at_boot"
+       android:title="@string/pref_boot"
+       android:defaultValue="false"
+       />
+
+    <EditTextPreference
+        android:key="listen_port"
+        android:title="@string/pref_port"
+        android:numeric="integer"
+        android:defaultValue="8081" />
+</PreferenceScreen>
