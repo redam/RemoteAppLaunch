@@ -4,5 +4,6 @@
     <string name="pref_port">Port</string>
     <string name="service_status">Service status</string>
     <string name="preferences">Preferences</string>
-    <string name="title_activity_select_apps">SelectAppsActivity</string>
+    <string name="title_activity_select_apps">Select app to be able to launch remotely</string>
+    <string name="add_app">Add an app to launch remotely</string>
 </resources>
