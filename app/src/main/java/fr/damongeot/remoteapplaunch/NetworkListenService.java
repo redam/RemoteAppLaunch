@@ -13,6 +13,7 @@ import android.hardware.camera2.CameraManager;
 import android.os.Build;
 import android.preference.PreferenceManager;
 import android.text.TextUtils;
+import android.util.Base64;
 import android.util.Log;
 
 import java.io.BufferedReader;
@@ -39,6 +40,8 @@ public class NetworkListenService extends IntentService {
     private ServerSocket mServerSocket;
     private boolean mIsRunning; //server is running
     private SharedPreferences mSP;
+    private boolean httpAuth; //is http authentication enabled ?
+    private String httpUsername,httpPassword;
 
     public NetworkListenService() {
         super("NetworkListenService");
@@ -47,6 +50,10 @@ public class NetworkListenService extends IntentService {
     @Override
     protected void onHandleIntent(Intent intent) {
         if (intent != null) {
+            mSP = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
+            httpAuth = mSP.getBoolean(MainActivity.HTTP_AUTHENTICATION,MainActivity.HTTP_AUTHENTICATION_DEF);
+            httpUsername = mSP.getString(MainActivity.HTTP_AUTHENTICATION_USER,MainActivity.HTTP_AUTHENTICATION_USER_DEF);
+            httpPassword = mSP.getString(MainActivity.HTTP_AUTHENTICATION_PASSWORD,MainActivity.HTTP_AUTHENTICATION_PASSWORD_DEF);
             mPort = intent.getIntExtra(MainActivity.LISTENING_PORT,MainActivity.LISTENING_PORT_DEF);
             mIsRunning = true;
             startServer();
@@ -82,25 +89,38 @@ public class NetworkListenService extends IntentService {
     private void handleRequest(Socket socket) throws IOException {
         BufferedReader reader = null;
         PrintStream output = null;
-        boolean foundGetRequest = false;
-        try {
-            String route = null;
+        String getRequest = null;
+        boolean foundAuthHeader = false;
+        boolean authSucceed = false;
 
-            // Read HTTP headers and parse out the route.
+        try {
+            // Read HTTP headers
             reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             String line;
 
-            Pattern p = Pattern.compile("GET /([^ ]*).*");
+            Pattern pGet = Pattern.compile("GET /([^ ]*).*"); //match GET request
+            Pattern pAuth = Pattern.compile("Authorization: Basic (.*)"); //match Authorization header
 
             while (!TextUtils.isEmpty(line = reader.readLine())) {
-                Matcher m = p.matcher(line);
-                if (m.matches()) {
-                    Log.d(TAG,m.group(1));
-                    foundGetRequest = true;
-                    launchApp(m.group(1));
-                    break;
+                Matcher m = pAuth.matcher(line);
+                if(m.matches()) {
+                    //Log.d(TAG,"found authorization header : "+line);
+                    authSucceed = checkAuth(m.group(1));
                 } else {
-                    //Log.d(TAG,"Unknow line : "+line);
+                    m = pGet.matcher(line);
+                    if (m.matches()) {
+                        Log.d(TAG, m.group(1));
+                        getRequest = m.group(1);
+                    } else {
+                        //Log.d(TAG,"Unknow line : "+line);
+                    }
+                }
+            }
+
+            // GET header arrives before authorization so we cant tread it in while loop
+            if(getRequest!=null) {
+                if (!httpAuth || authSucceed) {
+                    launchApp(getRequest);
                 }
             }
 
@@ -108,12 +128,18 @@ public class NetworkListenService extends IntentService {
             output = new PrintStream(socket.getOutputStream());
 
             // Prepare the content to send.
-            if (! foundGetRequest) {
+            if (getRequest == null) {
                 output.println("HTTP/1.0 404 Not Found");
                 output.flush();
             } else {
                 // Send out the content.
-                output.println("HTTP/1.0 200 No Content");
+                //if no authorization sent while http auth enabled, send auth headers
+                if(httpAuth && ! authSucceed) {
+                    output.println("HTTP/1.0 401 Unauthorized");
+                    output.println("WWW-Authenticate: Basic realm=\"RemoteAppLaunch\"");
+                } else {
+                    output.println("HTTP/1.0 200 No Content");
+                }
                 output.flush();
             }
         } finally {
@@ -127,10 +153,25 @@ public class NetworkListenService extends IntentService {
     }
 
     /**
+     * Check if username/password is matching from HTTP Basic header (user:password encoded in base64)
+     * @param authHeader
+     * @return
+     */
+    private boolean checkAuth(String authHeader) {
+        String userpass = new String(Base64.decode(authHeader.getBytes(),Base64.DEFAULT));
+        //Log.d(TAG,"HTTP Request contains authorization header : "+userpass);
+        if(userpass.equals(httpUsername+":"+httpPassword)) {
+            return true;
+        } else {
+            Log.w(TAG,"User/password did not match : "+userpass);
+            return false;
+        }
+    }
+
+    /**
      * Start app from package name if user has added it to launchable app list
      */
     private void launchApp(String packageName) {
-        mSP = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
         for(String pkgName : mSP.getStringSet(MainActivity.APP_LIST,new HashSet<String>(0))) {
             if(packageName.equals(pkgName)) {
                 //launch app

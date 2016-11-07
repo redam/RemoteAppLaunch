@@ -11,4 +11,22 @@
         android:title="@string/pref_port"
         android:numeric="integer"
         android:defaultValue="8081" />
+
+    <CheckBoxPreference
+        android:key="http_authentication"
+        android:title="@string/pref_boot"
+        android:defaultValue="false"
+        />
+
+    <EditTextPreference
+        android:key="http_user"
+        android:title="@string/pref_http_user"
+        android:dependency="http_authentication"
+        android:defaultValue="myuser" />
+
+    <EditTextPreference
+        android:key="http_password"
+        android:title="@string/pref_http_password"
+        android:dependency="http_authentication"
+        android:defaultValue="password" />
 </PreferenceScreen>

@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.net.Network;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
@@ -33,11 +34,18 @@ public class MainActivity extends AppCompatActivity {
     public final static int LISTENING_PORT_DEF = 8081;
     public final static String START_AT_BOOT = "start_at_boot";
     public final static boolean START_AT_BOOT_DEF = false;
+    public final static String HTTP_AUTHENTICATION = "http_authentication";
+    public final static boolean HTTP_AUTHENTICATION_DEF = false;
+    public final static String HTTP_AUTHENTICATION_USER = "http_user";
+    public final static String HTTP_AUTHENTICATION_USER_DEF = "myuser";
+    public final static String HTTP_AUTHENTICATION_PASSWORD = "http_password";
+    public final static String HTTP_AUTHENTICATION_PASSWORD_DEF = "password";
     public final static String APP_LIST = "setAppList";
     public final static int PICK_APP_REQUEST = 1;
     private ArrayList<ApplicationInfo> arrayAppList;
     private ApplicationAdapter applicationAdapter;
     private SharedPreferences mSP;
+    private Intent intentNLS = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,14 +73,13 @@ public class MainActivity extends AppCompatActivity {
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if (isChecked) {
                     // The toggle is enabled
-                    Intent intent = new Intent(MainActivity.this, NetworkListenService.class);
-                    intent.putExtra(LISTENING_PORT,getListeningPort());
-                    startService(intent);
+                    Intent intentNLS = new Intent(MainActivity.this, NetworkListenService.class);
+                    intentNLS.putExtra(LISTENING_PORT,getListeningPort());
+                    startService(intentNLS);
                     Log.d(TAG,"Starting service");
                 } else {
                     // The toggle is disabled
-                    Intent intent = new Intent(MainActivity.this, NetworkListenService.class);
-                    stopService(intent);
+                    if(intentNLS != null) stopService(intentNLS);
                     Log.d(TAG,"Stoping service");
                 }
             }
