@@ -4,10 +4,14 @@ import android.annotation.SuppressLint;
 import android.app.IntentService;
 import android.content.Intent;
 import android.content.Context;
+import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.hardware.Camera;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraManager;
 import android.os.Build;
+import android.preference.PreferenceManager;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -18,6 +22,9 @@ import java.io.PrintStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.util.HashSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * An {@link IntentService} subclass for handling asynchronous task requests in
@@ -31,10 +38,7 @@ public class NetworkListenService extends IntentService {
     private int mPort;
     private ServerSocket mServerSocket;
     private boolean mIsRunning; //server is running
-    private boolean isFlashOn = false;
-    private Camera mCamera;
-    private CameraManager mCamManager;
-    private Camera.Parameters params;
+    private SharedPreferences mSP;
 
     public NetworkListenService() {
         super("NetworkListenService");
@@ -85,15 +89,16 @@ public class NetworkListenService extends IntentService {
             // Read HTTP headers and parse out the route.
             reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             String line;
+
+            Pattern p = Pattern.compile("GET /([^ ]*).*");
+
             while (!TextUtils.isEmpty(line = reader.readLine())) {
-                if (line.startsWith("GET /on")) {
+                Matcher m = p.matcher(line);
+                if (m.matches()) {
+                    Log.d(TAG,m.group(1));
                     foundGetRequest = true;
-                    Log.d(TAG,"GET /on requests, setting flash light to ON");
-                    setFlash(true);
-                } else if(line.startsWith("GET /off")) {
-                    foundGetRequest = true;
-                    Log.d(TAG,"GET /off requests, setting flash light to OFF");
-                    setFlash(false);
+                    launchApp(m.group(1));
+                    break;
                 } else {
                     //Log.d(TAG,"Unknow line : "+line);
                 }
@@ -122,51 +127,20 @@ public class NetworkListenService extends IntentService {
     }
 
     /**
-     * Turn on or off flash
-     * @param state true = flash on, false = flash off
+     * Start app from package name if user has added it to launchable app list
      */
-    @SuppressLint("NewApi")
-    private void setFlash(boolean state) {
-        if(isFlashOn == state) return;
-
-        if(Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-            //use camera1 API before LOLLIPOP
-
-            //get camera parameters if not already done
-            if (mCamera == null) {
-                try {
-                    mCamera = Camera.open();
-                    params = mCamera.getParameters();
-                } catch (RuntimeException e) {
-                    Log.d(TAG, e.getMessage());
-                    return;
-                }
-            }
-
-            if (state) {
-                params.setFlashMode(Camera.Parameters.FLASH_MODE_TORCH);
-                mCamera.setParameters(params);
-                mCamera.startPreview();
-                Log.d(TAG, "setFlash() : flash on");
-            } else {
-                params.setFlashMode(Camera.Parameters.FLASH_MODE_OFF);
-                mCamera.setParameters(params);
-                mCamera.stopPreview();
-                Log.d(TAG, "setFlash() : flash on");
-            }
-        } else {
-            //use camera2 api for LOLLIPOP and UP
-
-            CameraManager mCamManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
-            String cameraId = null; // Usually front camera is at 0 position.
-            try {
-                cameraId = mCamManager.getCameraIdList()[0];
-                mCamManager.setTorchMode(cameraId, state);
-            } catch (CameraAccessException e) {
-                e.printStackTrace();
+    private void launchApp(String packageName) {
+        mSP = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
+        for(String pkgName : mSP.getStringSet(MainActivity.APP_LIST,new HashSet<String>(0))) {
+            if(packageName.equals(pkgName)) {
+                //launch app
+                Log.d(TAG,"Starting app " + packageName);
+                Intent intent = getPackageManager().getLaunchIntentForPackage(pkgName);
+                startActivity(intent);
+                return;
             }
         }
 
-        isFlashOn = state;
+        Log.w(TAG,"App "+packageName+" is not authorized to be started remotly");
     }
 }

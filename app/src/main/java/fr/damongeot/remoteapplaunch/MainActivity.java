@@ -156,25 +156,19 @@ public class MainActivity extends AppCompatActivity {
                     ApplicationInfo app = this.getPackageManager().getApplicationInfo(pkgName, 0);
                     arrayAppList.add(app);
                     applicationAdapter.notifyDataSetChanged();
+
+                    //save app list into SharedPreferences
+                    HashSet<String> setAppList = new HashSet<String>();
+                    for(ApplicationInfo ai: arrayAppList) {
+                        setAppList.add(ai.packageName);
+                    }
+                    SharedPreferences.Editor editor = mSP.edit();
+                    editor.putStringSet(APP_LIST,setAppList);
+                    editor.commit();
                 } catch (PackageManager.NameNotFoundException e) {
                     e.printStackTrace();
                 }
             }
         }
-    }
-
-    /**
-     * save app list before being killed/terminating
-     */
-    @Override
-    protected void onDestroy() {
-        HashSet<String> setAppList = new HashSet<String>();
-        for(ApplicationInfo ai: arrayAppList) {
-            setAppList.add(ai.packageName);
-        }
-        SharedPreferences.Editor editor = mSP.edit();
-        editor.putStringSet(APP_LIST,setAppList);
-        editor.commit();
-        super.onDestroy();
     }
 }
