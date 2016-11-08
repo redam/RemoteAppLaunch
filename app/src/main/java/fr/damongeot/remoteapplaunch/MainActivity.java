@@ -2,6 +2,7 @@ package fr.damongeot.remoteapplaunch;
 
 import android.app.ActivityManager;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
@@ -9,6 +10,7 @@ import android.content.pm.PackageManager;
 import android.net.Network;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceManager;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.ArraySet;
@@ -17,6 +19,7 @@ import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CompoundButton;
@@ -94,12 +97,39 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        ListView listView = (ListView) findViewById(R.id.lv_app);
+        final ListView listView = (ListView) findViewById(R.id.lv_app);
         applicationAdapter = new ApplicationAdapter(this,
                 R.layout.list_row_application,
                 arrayAppList);
 
         listView.setAdapter(applicationAdapter);
+
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> adapterView, View view, final int i, long l) {
+                ApplicationInfo applicationInfo = arrayAppList.get(i);
+
+                //show info popup with ok/delete buttons
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle(getString(R.string.app_info))
+                        .setMessage(getString(R.string.app_popup) + applicationInfo.packageName)
+                        .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int which) {
+                                // do nothing
+                            }
+                        })
+                        .setNegativeButton(R.string.delete, new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int which) {
+                                //delete app from list
+                                arrayAppList.remove(i);
+                                applicationAdapter.notifyDataSetChanged();
+                                saveAppList();
+                            }
+                        })
+                        .setIcon(android.R.drawable.ic_dialog_info)
+                        .show();
+            }
+        });
 
     }
 
@@ -163,19 +193,26 @@ public class MainActivity extends AppCompatActivity {
                     ApplicationInfo app = this.getPackageManager().getApplicationInfo(pkgName, 0);
                     arrayAppList.add(app);
                     applicationAdapter.notifyDataSetChanged();
-
-                    //save app list into SharedPreferences
-                    HashSet<String> setAppList = new HashSet<String>();
-                    for(ApplicationInfo ai: arrayAppList) {
-                        setAppList.add(ai.packageName);
-                    }
-                    SharedPreferences.Editor editor = mSP.edit();
-                    editor.putStringSet(APP_LIST,setAppList);
-                    editor.commit();
+                    saveAppList();
                 } catch (PackageManager.NameNotFoundException e) {
                     e.printStackTrace();
                 }
             }
         }
+    }
+
+    /**
+     * Save app list to "disk"
+     */
+    private void saveAppList() {
+        //save app list into SharedPreferences
+        HashSet<String> setAppList = new HashSet<String>();
+        for(ApplicationInfo ai: arrayAppList) {
+            setAppList.add(ai.packageName);
+        }
+        SharedPreferences.Editor editor = mSP.edit();
+        editor.putStringSet(APP_LIST,setAppList);
+        editor.commit();
+
     }
 }
