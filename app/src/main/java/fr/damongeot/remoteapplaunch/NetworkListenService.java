@@ -1,6 +1,7 @@
 package fr.damongeot.remoteapplaunch;
 
 import android.annotation.SuppressLint;
+import android.app.ActivityManager;
 import android.app.IntentService;
 import android.content.Intent;
 import android.content.Context;
@@ -35,6 +36,7 @@ import java.util.regex.Pattern;
  */
 public class NetworkListenService extends IntentService {
     private final static String TAG = "NetworkListenService";
+    private final static int ACTION_START = 1, ACTION_STOP = 2;
 
     private int mPort;
     private ServerSocket mServerSocket;
@@ -42,6 +44,7 @@ public class NetworkListenService extends IntentService {
     private SharedPreferences mSP;
     private boolean httpAuth; //is http authentication enabled ?
     private String httpUsername,httpPassword;
+    private ActivityManager am;
 
     public NetworkListenService() {
         super("NetworkListenService");
@@ -56,6 +59,7 @@ public class NetworkListenService extends IntentService {
             httpPassword = mSP.getString(MainActivity.HTTP_AUTHENTICATION_PASSWORD,MainActivity.HTTP_AUTHENTICATION_PASSWORD_DEF);
             mPort = intent.getIntExtra(MainActivity.LISTENING_PORT,MainActivity.LISTENING_PORT_DEF);
             mIsRunning = true;
+            am = (ActivityManager) getBaseContext().getSystemService(Context.ACTIVITY_SERVICE);
             startServer();
         }
     }
@@ -89,16 +93,18 @@ public class NetworkListenService extends IntentService {
     private void handleRequest(Socket socket) throws IOException {
         BufferedReader reader = null;
         PrintStream output = null;
-        String getRequest = null;
+        String packageName = null;
         boolean foundAuthHeader = false;
         boolean authSucceed = false;
+        int action = ACTION_START;
+        String outputMessage = "";
 
         try {
             // Read HTTP headers
             reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             String line;
 
-            Pattern pGet = Pattern.compile("GET /([^ ]*).*"); //match GET request
+            Pattern pGet = Pattern.compile("GET /(start|stop)/([^ ]*).*"); //match GET request
             Pattern pAuth = Pattern.compile("Authorization: Basic (.*)"); //match Authorization header
 
             while (!TextUtils.isEmpty(line = reader.readLine())) {
@@ -109,8 +115,9 @@ public class NetworkListenService extends IntentService {
                 } else {
                     m = pGet.matcher(line);
                     if (m.matches()) {
-                        Log.d(TAG, m.group(1));
-                        getRequest = m.group(1);
+                        Log.d(TAG, m.group(2));
+                        packageName = m.group(2);
+                        action = m.group(1).equals("start") ? ACTION_START:ACTION_STOP;
                     } else {
                         //Log.d(TAG,"Unknow line : "+line);
                     }
@@ -118,9 +125,21 @@ public class NetworkListenService extends IntentService {
             }
 
             // GET header arrives before authorization so we cant tread it in while loop
-            if(getRequest!=null) {
+            if(packageName!=null) {
                 if (!httpAuth || authSucceed) {
-                    launchApp(getRequest);
+                    switch (action) {
+                        case ACTION_START:
+                            try {
+                                launchApp(packageName);
+                                outputMessage = "App launched";
+                            } catch (Exception e) {
+                                outputMessage = e.getMessage();
+                            }
+                            break;
+                        case ACTION_STOP: killPackageProcesses(packageName);
+                            break;
+                    }
+
                 }
             }
 
@@ -128,7 +147,7 @@ public class NetworkListenService extends IntentService {
             output = new PrintStream(socket.getOutputStream());
 
             // Prepare the content to send.
-            if (getRequest == null) {
+            if (packageName == null) {
                 output.println("HTTP/1.0 404 Not Found");
                 output.flush();
             } else {
@@ -138,7 +157,9 @@ public class NetworkListenService extends IntentService {
                     output.println("HTTP/1.0 401 Unauthorized");
                     output.println("WWW-Authenticate: Basic realm=\"RemoteAppLaunch\"");
                 } else {
-                    output.println("HTTP/1.0 200 No Content");
+                    output.println("HTTP/1.0 200 OK");
+                    output.println("");
+                    output.println(outputMessage);
                 }
                 output.flush();
             }
@@ -171,7 +192,7 @@ public class NetworkListenService extends IntentService {
     /**
      * Start app from package name if user has added it to launchable app list
      */
-    private void launchApp(String packageName) {
+    private void launchApp(String packageName) throws Exception {
         for(String pkgName : mSP.getStringSet(MainActivity.APP_LIST,new HashSet<String>(0))) {
             if(packageName.equals(pkgName)) {
                 //launch app
@@ -182,6 +203,45 @@ public class NetworkListenService extends IntentService {
             }
         }
 
-        Log.w(TAG,"App "+packageName+" is not authorized to be started remotly");
+        throw new Exception("App "+packageName+" is not authorized to be started remotely (or is an invalid package name)");
+    }
+
+    public int findPIDbyPackageName(String packagename) {
+        int result = -1;
+
+        if (am != null) {
+            for (ActivityManager.RunningAppProcessInfo pi : am.getRunningAppProcesses()){
+                if (pi.processName.equalsIgnoreCase(packagename)) {
+                    result = pi.pid;
+                }
+                if (result != -1) break;
+            }
+        } else {
+            result = -1;
+        }
+
+        return result;
+    }
+
+    public boolean isPackageRunning(String packagename) {
+        return findPIDbyPackageName(packagename) != -1;
+    }
+
+    /**
+     * Kill processes from a given package name
+     * @param packagename
+     * @return
+     */
+    public boolean killPackageProcesses(String packagename) {
+        boolean result = false;
+
+        if (am != null) {
+            am.killBackgroundProcesses(packagename);
+            result = !isPackageRunning(packagename);
+        } else {
+            result = false;
+        }
+
+        return result;
     }
 }

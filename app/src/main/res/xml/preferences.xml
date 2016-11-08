@@ -14,7 +14,7 @@
 
     <CheckBoxPreference
         android:key="http_authentication"
-        android:title="@string/pref_boot"
+        android:title="@string/pref_http_auth"
         android:defaultValue="false"
         />
 
