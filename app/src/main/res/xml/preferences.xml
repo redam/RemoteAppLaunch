@@ -10,7 +10,7 @@
         android:key="listen_port"
         android:title="@string/pref_port"
         android:numeric="integer"
-        android:defaultValue="8081" />
+        android:defaultValue="8888" />
 
     <CheckBoxPreference
         android:key="http_authentication"

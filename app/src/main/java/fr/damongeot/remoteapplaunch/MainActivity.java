@@ -1,6 +1,7 @@
 package fr.damongeot.remoteapplaunch;
 
 import android.app.ActivityManager;
+import android.app.KeyguardManager;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -34,7 +35,7 @@ import java.util.Set;
 public class MainActivity extends AppCompatActivity {
     private final static String TAG = "MainActivity";
     public final static String LISTENING_PORT = "listen_port";
-    public final static int LISTENING_PORT_DEF = 8081;
+    public final static int LISTENING_PORT_DEF = 8888;
     public final static String START_AT_BOOT = "start_at_boot";
     public final static boolean START_AT_BOOT_DEF = false;
     public final static String HTTP_AUTHENTICATION = "http_authentication";
@@ -130,7 +131,6 @@ public class MainActivity extends AppCompatActivity {
                         .show();
             }
         });
-
     }
 
     /**

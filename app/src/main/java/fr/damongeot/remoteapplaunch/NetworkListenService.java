@@ -3,6 +3,7 @@ package fr.damongeot.remoteapplaunch;
 import android.annotation.SuppressLint;
 import android.app.ActivityManager;
 import android.app.IntentService;
+import android.app.KeyguardManager;
 import android.content.Intent;
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -12,10 +13,12 @@ import android.hardware.Camera;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraManager;
 import android.os.Build;
+import android.os.PowerManager;
 import android.preference.PreferenceManager;
 import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
+import android.view.WindowManager;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -53,6 +56,7 @@ public class NetworkListenService extends IntentService {
     @Override
     protected void onHandleIntent(Intent intent) {
         if (intent != null) {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             mSP = PreferenceManager.getDefaultSharedPreferences(getBaseContext());
             httpAuth = mSP.getBoolean(MainActivity.HTTP_AUTHENTICATION,MainActivity.HTTP_AUTHENTICATION_DEF);
             httpUsername = mSP.getString(MainActivity.HTTP_AUTHENTICATION_USER,MainActivity.HTTP_AUTHENTICATION_USER_DEF);
@@ -70,6 +74,7 @@ public class NetworkListenService extends IntentService {
     private void startServer() {
         try {
             mServerSocket = new ServerSocket(mPort);
+            //acquire wakelock to prevent phone going to sleep and forbidding launching activity
             while (mIsRunning) {
                 Log.d(TAG,"Listening on port "+mPort);
                 Socket socket = mServerSocket.accept();
@@ -198,7 +203,20 @@ public class NetworkListenService extends IntentService {
                 //launch app
                 Log.d(TAG,"Starting app " + packageName);
                 Intent intent = getPackageManager().getLaunchIntentForPackage(pkgName);
+                KeyguardManager km = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
+                final KeyguardManager.KeyguardLock kl=km.newKeyguardLock("My_App");
+                kl.disableKeyguard();
+
+                PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+                PowerManager.WakeLock wl=pm.newWakeLock(PowerManager.ACQUIRE_CAUSES_WAKEUP | PowerManager.FULL_WAKE_LOCK, TAG);
+                wl.acquire();
                 startActivity(intent);
+
+                //let the app have some time to start before removing wakelock and keyguard
+                Thread.sleep(5000);
+                wl.release();
+                kl.reenableKeyguard();
+
                 return;
             }
         }
