@@ -13,6 +13,8 @@ To stop the app remotely, you just need to switch from "start" to "stop" in the 
 http://yourPhoneIP:8888/stop/org.mozilla.firefox
 ```
 
+Be aware that android doesn't allow a foreground app to be killed, only background processes. If you remotely launch an app that stays in foreground, it can't be killed remotely by Remote App Launch.
+
 Each app you want to start remotely need to be added in a white list within RemoteAppLaunch (for security reasons). You can add one more security layer by using HTTP Authentication with a user/password needed to start/stop apps. In that case, to launch an app just use the following URL :
 ```
 http://username:password@yourPhoneIP:8888/start/org.mozilla.firefox
